@@ -1,5 +1,6 @@
-SALSFORCE_CLIENT_ID: 3MVG9ZF4bs_.MKujBFvgmaCZKP9THCjqOYr9u1f.kxo3stRAdvqdRfCEiyzu0rVNpBR7x2G7LjwJlZABIFRNr
-SALSFORCE_CLIENT_SECRET: 3419DC4A900AFAD0AD9B5D790C763AD43F9E64677872FCA9D9060C11C4DD938E
+SALSFORCE_CLIENT_ID:
+SALSFORCE_CLIENT_SECRET:
+
 spring:
   security:
     oauth2:
@@ -21,6 +22,3 @@ spring:
     store-type: redis
   redis:
     url: ${REDIS_URL}
-#logging:
-#  level:
-#    root: debug
