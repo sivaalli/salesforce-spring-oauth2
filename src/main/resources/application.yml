@@ -1,23 +1,36 @@
-SALSFORCE_CLIENT_ID:
-SALSFORCE_CLIENT_SECRET:
+MC_CLIENT_ID:
+MC_CLIENT_SECRET:
+logging:
+  level:
+    root: info
+security:
 
+server:
+  ssl:
+    key-store-type: PKCS12
+    key-store: classpath:baeldung.p12
+    key-store-password: changeit
+    key-alias: baeldung
+  port: 8443
 spring:
   security:
     oauth2:
       client:
         registration:
-          salesforce:
-            client-id: ${SALSFORCE_CLIENT_ID}
-            client-secret: ${SALSFORCE_CLIENT_SECRET}
+          social:
+            clientAuthenticationMethod: POST
+            client-id: ${MC_CLIENT_ID}
+            client-secret: ${MC_CLIENT_SECRET}
             client-name: Salesforce user
-            redirect-uri: https://spring-salesforce-oauth2.herokuapp.com/login/oauth2/code/salesforce
+            redirect-uri: https://127.0.0.1:8443/login/oauth2/code/social
             authorization-grant-type: authorization_code
         provider:
-          salesforce:
-            authorization-uri: https://login.salesforce.com/services/oauth2/authorize
-            token-uri: https://login.salesforce.com/services/oauth2/token
-            user-info-uri: https://login.salesforce.com/services/oauth2/userinfo
-            user-name-attribute: preferred_username
+          social:
+            authorization-uri: https://mc882zkqmv0jpg-dz8-ng69z7ws4.auth-qa1.marketingcloudqaapis.com/v2/authorize
+            token-uri: https://mc882zkqmv0jpg-dz8-ng69z7ws4.auth-qa1.marketingcloudqaapis.com/v2/token
+#            user-info-uri: https://mc882zkqmv0jpg-dz8-ng69z7ws4.auth-qa1.marketingcloudqaapis.com/v2/userinfo
+#            jwkSetUri: https://login.marketingcloud.com/id/keys
+            user-name-attribute: iss
   session:
     store-type: redis
   redis:
