@@ -7,10 +7,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
@@ -18,15 +22,22 @@ import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.session.FlushMode;
 import org.springframework.session.data.redis.config.ConfigureRedisAction;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.client.RestTemplate;
 
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -38,7 +49,6 @@ public class SpringSessionApplication {
     private static final Logger logger = LoggerFactory.getLogger(SpringSessionApplication.class);
 
     private static final String USER_INFO_URI = "https://%s.auth-qa1.marketingcloudqaapis.com/v2/userinfo";
-    private static final String MC_REST_URL = "https://%s.rest-qa1.marketingcloudqaapis.com/";
 
     @Autowired
     private RestUserPermissions userPermissionsClient;
@@ -64,8 +74,18 @@ public class SpringSessionApplication {
         final Map<String, Object> attributes = new HashMap<>(oAuth2User.getAttributes());
         attributes.put("token", authorizedClient.getAccessToken().getTokenValue());
 
+        try {
+            final List<McPermissionItem> userPermissions =
+                    userPermissionsClient
+                            .permissions(getMcRestUrl(), authorizedClient.getAccessToken().getTokenValue());
+            attributes.put("userPermissions", userPermissions);
+        } catch (MalformedURLException | UnsupportedEncodingException ex) {
+            attributes.put("userPermissions", "ERROR: " + ex.getMessage());
+        }
+
         model.addAttribute("clientName", authorizedClient.getClientRegistration().getClientName());
         model.addAttribute("userAttributes", attributes);
+
         return "index";
     }
 
@@ -96,13 +116,56 @@ public class SpringSessionApplication {
 
                 final OAuth2User user = delegate.loadUser(request);
 
-                final List<McPermissionItem> userPermissions =
-                        userPermissionsClient.permissions(userRequest.getAccessToken().getTokenValue());
-                user.getAttributes().put("userPermissions", userPermissions);
+                //TODO: Need to find an alternate way of getting rest template to work. Look into DefaultOAuth2UserService
+//                if (StringUtils.hasText(registration.getProviderDetails().getUserInfoEndpoint().getUri())) {
+//                    final Map<String, Object> attributes = new HashMap<>(user.getAttributes());
+//                    final String userNameAttributeName = registration.getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
+//
+//                    try {
+//                        final List<McPermissionItem> userPermissions =
+//                                userPermissionsClient
+//                                        .permissions(restUrl, request.getAccessToken().getTokenValue());
+//                        attributes.put("userPermissionsInOAuth", userPermissions);
+//                    } catch (MalformedURLException | UnsupportedEncodingException ex) {
+//                        attributes.put("userPermissionsInOAuth", "ERROR: " + ex.getMessage());
+//                    }
+//
+//                    return new DefaultOAuth2User(user.getAuthorities(), attributes, userNameAttributeName);
+//                }
 
                 return user;
             }
         };
+    }
+
+    @Bean
+    public RestTemplate template(RestTemplateBuilder builder) {
+        return builder.setConnectTimeout(Duration.ofSeconds(10))
+                .setReadTimeout(Duration.ofSeconds(5))
+                // use apache http client
+                .requestFactory(HttpComponentsClientHttpRequestFactory.class)
+                .build();
+    }
+
+    public static String getMcRestUrl() {
+        final OAuth2AuthenticationToken authentication =
+                (OAuth2AuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+        Object restUrlInfo = null;
+        if (authentication != null &&
+                authentication.getPrincipal() != null &&
+                authentication.getPrincipal().getAttributes() != null &&
+                authentication.getPrincipal().getAttributes().containsKey("rest")) {
+            restUrlInfo = authentication.getPrincipal().getAttribute("rest");
+        }
+        String restTssdUrl = "";
+        if (restUrlInfo instanceof LinkedHashMap) {
+            final LinkedHashMap restUrlInfoMap = (LinkedHashMap)restUrlInfo;
+            if (restUrlInfoMap.containsKey("rest_instance_url")) {
+                restTssdUrl = restUrlInfoMap.get("rest_instance_url").toString();
+            }
+        }
+        logger.info("Rest Tssd Url: " + restTssdUrl);
+        return restTssdUrl;
     }
 }
 
