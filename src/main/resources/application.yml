@@ -1,17 +1,6 @@
-MC_CLIENT_ID:
-MC_CLIENT_SECRET:
 logging:
   level:
     root: info
-security:
-
-server:
-  ssl:
-    key-store-type: PKCS12
-    key-store: classpath:baeldung.p12
-    key-store-password: changeit
-    key-alias: baeldung
-  port: 8443
 spring:
   security:
     oauth2:
@@ -22,7 +11,7 @@ spring:
             client-id: ${MC_CLIENT_ID}
             client-secret: ${MC_CLIENT_SECRET}
             client-name: Salesforce user
-            redirect-uri: https://127.0.0.1:8443/login/oauth2/code/social
+            redirect-uri: https://spring-salesforce-oauth2.herokuapp.com/login/oauth2/code/social
             authorization-grant-type: authorization_code
         provider:
           social:
