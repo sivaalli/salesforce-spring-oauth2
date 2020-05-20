@@ -49,6 +49,8 @@ public class SpringSessionApplication {
     public String email1(
             Model model, @RegisteredOAuth2AuthorizedClient OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oAuth2User) {
+        model.addAttribute("method", "UserInfo & Permissions");
+
         model.addAttribute("userName", oAuth2User.getName());
 
         Map<String, Object> attributes = new HashMap<>(oAuth2User.getAttributes());
