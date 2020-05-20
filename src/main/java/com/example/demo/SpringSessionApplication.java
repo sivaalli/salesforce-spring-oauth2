@@ -1,8 +1,10 @@
 package com.example.demo;
 
+import com.example.demo.RestUserPermissions.McPermissionItem;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +27,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Controller
@@ -35,6 +38,10 @@ public class SpringSessionApplication {
     private static final Logger logger = LoggerFactory.getLogger(SpringSessionApplication.class);
 
     private static final String USER_INFO_URI = "https://%s.auth-qa1.marketingcloudqaapis.com/v2/userinfo";
+    private static final String MC_REST_URL = "https://%s.rest-qa1.marketingcloudqaapis.com/";
+
+    @Autowired
+    private RestUserPermissions userPermissionsClient;
 
     @Bean
     public static ConfigureRedisAction configureRedisAction() {
@@ -46,15 +53,16 @@ public class SpringSessionApplication {
     }
 
     @GetMapping("/")
-    public String email1(
-            Model model, @RegisteredOAuth2AuthorizedClient OAuth2AuthorizedClient authorizedClient,
+    public String indexPage(
+            Model model,
+            @RegisteredOAuth2AuthorizedClient OAuth2AuthorizedClient authorizedClient,
             @AuthenticationPrincipal OAuth2User oAuth2User) {
         model.addAttribute("method", "UserInfo & Permissions");
 
         model.addAttribute("userName", oAuth2User.getName());
 
-        Map<String, Object> attributes = new HashMap<>(oAuth2User.getAttributes());
-        attributes.put("TOKEN", authorizedClient.getAccessToken().getTokenValue());
+        final Map<String, Object> attributes = new HashMap<>(oAuth2User.getAttributes());
+        attributes.put("token", authorizedClient.getAccessToken().getTokenValue());
 
         model.addAttribute("clientName", authorizedClient.getClientRegistration().getClientName());
         model.addAttribute("userAttributes", attributes);
@@ -76,6 +84,7 @@ public class SpringSessionApplication {
             public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
                 final String restUrl = userRequest.getAdditionalParameters().get("rest_instance_url").toString();
                 final String tssd = restUrl.substring(8, 8 + 28); // TSSD is 28 character length.
+
                 final ClientRegistration registration =
                         ClientRegistration.withClientRegistration(userRequest.getClientRegistration())
                                 .userInfoUri(String.format(USER_INFO_URI, tssd))
@@ -84,7 +93,14 @@ public class SpringSessionApplication {
                 final OAuth2UserRequest request = new OAuth2UserRequest(registration,
                                                                         userRequest.getAccessToken(),
                                                                         userRequest.getAdditionalParameters());
-                return delegate.loadUser(request);
+
+                final OAuth2User user = delegate.loadUser(request);
+
+                final List<McPermissionItem> userPermissions =
+                        userPermissionsClient.permissions(userRequest.getAccessToken().getTokenValue());
+                user.getAttributes().put("userPermissions", userPermissions);
+
+                return user;
             }
         };
     }
