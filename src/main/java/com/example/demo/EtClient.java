@@ -1,8 +1,3 @@
-/*
- * Copyright (C) 2010-2020 Evergage, Inc.
- * All rights reserved.
- */
-
 package com.example.demo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
