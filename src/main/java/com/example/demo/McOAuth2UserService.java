@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.security.oauth2.client.userinfo;
+package com.example.demo;
 
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +28,9 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.http.OAuth2ErrorResponseErrorHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequestEntityConverter;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
@@ -112,7 +116,9 @@ public class McOAuth2UserService implements OAuth2UserService<OAuth2UserRequest,
             permissionResponse = callRestRoute(permissionRequest, "Permission");
         }
 
-        final Map<String, Object> userAttributes = userResponse.getBody();
+        final Map<String, Object> userAttributes = userResponse.getBody() != null
+                ? userResponse.getBody()
+                : new HashMap<>();
         final Set<GrantedAuthority> authorities = new LinkedHashSet<>();
         authorities.add(new OAuth2UserAuthority(userAttributes));
         final OAuth2AccessToken token = userRequest.getAccessToken();
@@ -123,6 +129,10 @@ public class McOAuth2UserService implements OAuth2UserService<OAuth2UserRequest,
         if (permissionResponse != null) {
             final Map<String, Object> permissionAttributes = permissionResponse.getBody();
             if (permissionAttributes != null) {
+                if (permissionAttributes.containsKey("items")) {
+                    permissionAttributes.put("userPermissions", permissionAttributes.get("items"));
+                    permissionAttributes.remove("items");
+                }
                 userAttributes.putAll(permissionAttributes);
             }
         }
