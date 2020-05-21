@@ -17,6 +17,7 @@ import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2Aut
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
+import org.springframework.security.oauth2.client.userinfo.McOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizedClientRepository;
@@ -35,6 +36,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -50,8 +54,8 @@ public class SpringSessionApplication {
 
     private static final String USER_INFO_URI = "https://%s.auth-qa1.marketingcloudqaapis.com/v2/userinfo";
 
-    @Autowired
-    private RestUserPermissions userPermissionsClient;
+//    @Autowired
+//    private RestUserPermissions userPermissionsClient;
 
     @Bean
     public static ConfigureRedisAction configureRedisAction() {
@@ -74,14 +78,14 @@ public class SpringSessionApplication {
         final Map<String, Object> attributes = new HashMap<>(oAuth2User.getAttributes());
         attributes.put("token", authorizedClient.getAccessToken().getTokenValue());
 
-        try {
-            final List<McPermissionItem> userPermissions =
-                    userPermissionsClient
-                            .permissions(getMcRestUrl(), authorizedClient.getAccessToken().getTokenValue());
-            attributes.put("userPermissions", userPermissions);
-        } catch (MalformedURLException | UnsupportedEncodingException ex) {
-            attributes.put("userPermissions", "ERROR: " + ex.getMessage());
-        }
+//        try {
+//            final List<McPermissionItem> userPermissions =
+//                    userPermissionsClient
+//                            .permissions(getMcRestUrl(), authorizedClient.getAccessToken().getTokenValue());
+//            attributes.put("userPermissions", userPermissions);
+//        } catch (MalformedURLException | UnsupportedEncodingException ex) {
+//            attributes.put("userPermissions", "ERROR: " + ex.getMessage());
+//        }
 
         model.addAttribute("clientName", authorizedClient.getClientRegistration().getClientName());
         model.addAttribute("userAttributes", attributes);
@@ -98,23 +102,32 @@ public class SpringSessionApplication {
     public OAuth2UserService<OAuth2UserRequest, OAuth2User> userService() {
         return new OAuth2UserService<OAuth2UserRequest, OAuth2User>() {
 
-            private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
+//            private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
+            private final McOAuth2UserService delegate = new McOAuth2UserService();
 
             @Override
             public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
                 final String restUrl = userRequest.getAdditionalParameters().get("rest_instance_url").toString();
                 final String tssd = restUrl.substring(8, 8 + 28); // TSSD is 28 character length.
 
-                final ClientRegistration registration =
-                        ClientRegistration.withClientRegistration(userRequest.getClientRegistration())
-                                .userInfoUri(String.format(USER_INFO_URI, tssd))
-                                .build();
-                logger.info("UserInfo route is {}", registration.getProviderDetails().getUserInfoEndpoint().getUri());
-                final OAuth2UserRequest request = new OAuth2UserRequest(registration,
-                                                                        userRequest.getAccessToken(),
-                                                                        userRequest.getAdditionalParameters());
+//                final ClientRegistration registration =
+//                        ClientRegistration.withClientRegistration(userRequest.getClientRegistration())
+//                                .userInfoUri(String.format(USER_INFO_URI, tssd))
+//                                .build();
+//                logger.info("UserInfo route is {}", registration.getProviderDetails().getUserInfoEndpoint().getUri());
+//                final OAuth2UserRequest request = new OAuth2UserRequest(registration,
+//                                                                        userRequest.getAccessToken(),
+//                                                                        userRequest.getAdditionalParameters());
 
-                final OAuth2User user = delegate.loadUser(request);
+                final OAuth2UserRequest oauth2UserRequest = createRequest(userRequest,
+                                                                          String.format(USER_INFO_URI, tssd),
+                                                                          "User");
+                final OAuth2UserRequest oauth2PermissionRequest = createRequest(userRequest,
+                                                                                getPermissionRoute(restUrl),
+                                                                                "Permission");
+
+//                final OAuth2User user = delegate.loadUser(request);
+                final OAuth2User user = delegate.loadUser(oauth2UserRequest, oauth2PermissionRequest);
 
                 //TODO: Need to find an alternate way of getting rest template to work. Look into DefaultOAuth2UserService
 //                if (StringUtils.hasText(registration.getProviderDetails().getUserInfoEndpoint().getUri())) {
@@ -147,25 +160,54 @@ public class SpringSessionApplication {
                 .build();
     }
 
-    public static String getMcRestUrl() {
-        final OAuth2AuthenticationToken authentication =
-                (OAuth2AuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
-        Object restUrlInfo = null;
-        if (authentication != null &&
-                authentication.getPrincipal() != null &&
-                authentication.getPrincipal().getAttributes() != null &&
-                authentication.getPrincipal().getAttributes().containsKey("rest")) {
-            restUrlInfo = authentication.getPrincipal().getAttribute("rest");
+//    public static String getMcRestUrl() {
+//        final OAuth2AuthenticationToken authentication =
+//                (OAuth2AuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
+//        Object restUrlInfo = null;
+//        if (authentication != null &&
+//                authentication.getPrincipal() != null &&
+//                authentication.getPrincipal().getAttributes() != null &&
+//                authentication.getPrincipal().getAttributes().containsKey("rest")) {
+//            restUrlInfo = authentication.getPrincipal().getAttribute("rest");
+//        }
+//        String restTssdUrl = "";
+//        if (restUrlInfo instanceof LinkedHashMap) {
+//            final LinkedHashMap restUrlInfoMap = (LinkedHashMap)restUrlInfo;
+//            if (restUrlInfoMap.containsKey("rest_instance_url")) {
+//                restTssdUrl = restUrlInfoMap.get("rest_instance_url").toString();
+//            }
+//        }
+//        logger.info("Rest Tssd Url: " + restTssdUrl);
+//        return restTssdUrl;
+//    }
+
+    private OAuth2UserRequest createRequest(final OAuth2UserRequest userRequest, final String targetUri, final String requestType) {
+        final ClientRegistration registration =
+                ClientRegistration.withClientRegistration(userRequest.getClientRegistration())
+                        .userInfoUri(targetUri)
+                        .build();
+        logger.info("{} UserInfo route is {}", requestType, registration.getProviderDetails().getUserInfoEndpoint().getUri());
+        return new OAuth2UserRequest(registration,
+                                     userRequest.getAccessToken(),
+                                     userRequest.getAdditionalParameters());
+    }
+
+    private String getPermissionRoute(final String restUrl) {
+        final String INTERACTION_STUDIO_APP = "InteractionStudioV2";
+        final String PERMISSION_FILTER_OBJECT_TYPE = "ObjectType";
+        final String PERMISSIONS_INFO_URI = "/platform-internal/v1/users/@current/permissions?$pageSize=1000&$filter=%s";
+
+        try {
+            final URL targetUrl = new URL(new URL(restUrl),
+                                          String.format(PERMISSIONS_INFO_URI,
+                                                        URLEncoder.encode(String.format("%s=%s",
+                                                                                        PERMISSION_FILTER_OBJECT_TYPE,
+                                                                                        INTERACTION_STUDIO_APP),
+                                                                          StandardCharsets.UTF_8.toString())));
+            return targetUrl.toString();
+        } catch (final MalformedURLException | UnsupportedEncodingException ex) {
+            return null;
         }
-        String restTssdUrl = "";
-        if (restUrlInfo instanceof LinkedHashMap) {
-            final LinkedHashMap restUrlInfoMap = (LinkedHashMap)restUrlInfo;
-            if (restUrlInfoMap.containsKey("rest_instance_url")) {
-                restTssdUrl = restUrlInfoMap.get("rest_instance_url").toString();
-            }
-        }
-        logger.info("Rest Tssd Url: " + restTssdUrl);
-        return restTssdUrl;
     }
 }
 
